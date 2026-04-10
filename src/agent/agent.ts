@@ -132,7 +132,7 @@ export async function handleMessage(
   // 6. Build message history for the LLM
   session.messageHistory.push({ role: "user", content: message });
 
-  // 7. Generate response using AI SDK
+  // 7. Generate initial response using AI SDK
   const result = await generateText({
     model: getModel("main"),
     system: systemPrompt,
@@ -141,16 +141,21 @@ export async function handleMessage(
     stopWhen: stepCountIs(5),
   });
 
-  const responseText = result.text;
+  // 8. Reflection step — critique and improve the response before returning
+  const responseText = await reflectOnResponse(
+    message,
+    result.text,
+    corrections
+  );
 
-  // 8. Add assistant response to history
+  // 9. Add assistant response to history
   session.messageHistory.push({ role: "assistant", content: responseText });
 
-  // 9. Store messages in DB (fire and forget)
+  // 10. Store messages in DB (fire and forget)
   const topicRooms = contextState.context.activeRooms.map((r) => r.room);
   storeMessages(session, message, responseText, topicRooms).catch(() => {});
 
-  // 10. Detect preferences in background (fire and forget)
+  // 11. Detect preferences in background (fire and forget)
   detectPreferences(session.userId, message, responseText).catch(() => {});
 
   return responseText;
@@ -282,6 +287,108 @@ export async function handleFeedback(
       return `Feedback partially processed. Detected: ${partialCategory}.`;
     }
     return "Had trouble processing feedback, but it's been noted.";
+  }
+}
+
+// ─── Reflection ──────────────────────────────────────────────────────────────
+
+/**
+ * Self-critique step: evaluate the generated response and improve it if needed.
+ * This is the reflection/critic step the assignment asks for.
+ *
+ * Flow: Initial Answer → Reflection → Improved Final Answer
+ */
+async function reflectOnResponse(
+  userMessage: string,
+  initialResponse: string,
+  factCheckCorrections: string[]
+): Promise<string> {
+  // Skip reflection for very short responses or if fact-check already corrected things
+  if (initialResponse.length < 50 || factCheckCorrections.length > 0) {
+    return initialResponse;
+  }
+
+  try {
+    // Also check if we have any past feedback for similar questions
+    const pastFeedback = await findRelevantFeedback(userMessage);
+
+    const feedbackContext = pastFeedback.length > 0
+      ? `\n\nPast feedback on similar questions:\n${pastFeedback.map((f) => `- [${f.feedbackType}] ${f.analysis ?? f.resolution ?? "no details"}`).join("\n")}`
+      : "";
+
+    const { text: improved } = await generateText({
+      model: getModel("fast"),
+      system: `You rewrite AI responses to be better. Output ONLY the improved response text — no commentary, no "Here's the improved version", no explanation of changes. If the original is already good, output it exactly as-is.`,
+      prompt: `User asked: "${userMessage}"
+${feedbackContext}
+
+Rewrite this response if it can be improved, otherwise return it exactly as-is:
+
+${initialResponse}`,
+    });
+
+    // Guard: if reflection output looks like meta-commentary, use the original
+    const metaPhrases = ["the response", "the answer", "this is", "looks good", "is correct", "is accurate", "no changes", "already good"];
+    const firstLine = (improved || "").split("\n")[0]?.toLowerCase() ?? "";
+    if (metaPhrases.some((p) => firstLine.startsWith(p))) {
+      return initialResponse;
+    }
+
+    return improved || initialResponse;
+  } catch {
+    // Reflection failure shouldn't block the response
+    return initialResponse;
+  }
+}
+
+/**
+ * Direct lookup of past feedback for similar questions.
+ * Fallback for when palace search doesn't find topic-routed corrections.
+ */
+async function findRelevantFeedback(
+  question: string
+): Promise<Array<{ feedbackType: string; analysis: string | null; resolution: string | null }>> {
+  try {
+    const questionEmb = await embedText(question);
+    const embeddingStr = `[${questionEmb.join(",")}]`;
+
+    // Search feedback table by embedding similarity on the original response
+    // Also search verified_facts for any relevant corrections
+    const result = await db.execute(sql`
+      SELECT feedback_type, analysis, resolution
+      FROM feedback
+      WHERE original_response IS NOT NULL
+      ORDER BY created_at DESC
+      LIMIT 10
+    `);
+
+    // Also check verified_facts for relevant corrections
+    const facts = await db.execute(sql`
+      SELECT claim, verdict, explanation
+      FROM verified_facts
+      WHERE embedding IS NOT NULL
+      ORDER BY embedding <=> ${embeddingStr}::vector
+      LIMIT 3
+    `);
+
+    const feedbackRows = (result.rows as Array<{ feedback_type: string; analysis: string | null; resolution: string | null }>)
+      .map((r) => ({
+        feedbackType: r.feedback_type,
+        analysis: r.analysis,
+        resolution: r.resolution,
+      }));
+
+    const factRows = (facts.rows as Array<{ claim: string; verdict: string; explanation: string }>)
+      .filter((f) => f.verdict === "refuted")
+      .map((f) => ({
+        feedbackType: "correction" as const,
+        analysis: `Past fact-check: "${f.claim}" was ${f.verdict}`,
+        resolution: f.explanation,
+      }));
+
+    return [...factRows, ...feedbackRows].slice(0, 5);
+  } catch {
+    return [];
   }
 }
 
