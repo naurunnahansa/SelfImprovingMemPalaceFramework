@@ -1,4 +1,4 @@
-import { generateText, stepCountIs } from "ai";
+import { generateText, streamText, stepCountIs } from "ai";
 import { createActor, waitFor } from "xstate";
 import { getModel } from "../config.js";
 import { classifyMessage } from "./classifier.js";
@@ -159,6 +159,101 @@ export async function handleMessage(
   detectPreferences(session.userId, message, responseText).catch(() => {});
 
   return responseText;
+}
+
+/**
+ * Streaming version of handleMessage. Yields text deltas and tool call
+ * notifications so the CLI can print tokens as they arrive.
+ */
+export async function handleMessageStream(
+  session: Session,
+  message: string,
+  callbacks: {
+    onText: (delta: string) => void;
+    onToolCall: (toolName: string, args: Record<string, unknown>) => void;
+    onToolResult: (toolName: string, result: unknown) => void;
+    onDone: (fullText: string) => void;
+  }
+): Promise<string> {
+  // 1. Classify (show spinner status in CLI)
+  const classification = await classifyMessage(message);
+
+  // 2. Context machine
+  session.contextActor.send({ type: "MESSAGE_RECEIVED", message });
+  await waitFor(session.contextActor, (state) => state.value === "idle", {
+    timeout: 15_000,
+  });
+  const contextState = session.contextActor.getSnapshot();
+  const activeRooms = contextState.context.activeRooms;
+
+  // 3. Fact-check
+  let corrections: string[] = [];
+  const factualClaims = classification.claims.filter(
+    (c) => c.type === "factual"
+  );
+  if (factualClaims.length > 0) {
+    try {
+      const factCheckActor = createActor(factCheckMachine, {
+        input: { message },
+      });
+      factCheckActor.start();
+      const factCheckDone = await waitFor(
+        factCheckActor,
+        (state) => state.status === "done",
+        { timeout: 30_000 }
+      );
+      corrections = factCheckDone.output?.corrections ?? [];
+    } catch {
+      // proceed without
+    }
+  }
+
+  // 4. Preferences + prompt
+  const preferences = await getPreferences(session.userId);
+  const systemPrompt = await buildSystemPrompt(
+    session.userId,
+    activeRooms,
+    message,
+    preferences,
+    corrections.length > 0 ? corrections : undefined
+  );
+
+  session.messageHistory.push({ role: "user", content: message });
+
+  // 5. Stream the response
+  const result = streamText({
+    model: getModel("main"),
+    system: systemPrompt,
+    messages: session.messageHistory,
+    tools: agentTools,
+    stopWhen: stepCountIs(5),
+  });
+
+  // Consume the full stream — text deltas + tool call notifications
+  let fullText = "";
+  for await (const part of result.fullStream) {
+    if (part.type === "text-delta") {
+      fullText += part.text;
+      callbacks.onText(part.text);
+    } else if (part.type === "tool-call") {
+      callbacks.onToolCall(part.toolName, (part as unknown as { input: Record<string, unknown> }).input ?? {});
+    } else if (part.type === "tool-result") {
+      callbacks.onToolResult(part.toolName, (part as unknown as { output: unknown }).output ?? null);
+    }
+  }
+
+  // Wait for all steps to complete (tool calls etc.)
+  const finalResult = await result;
+  fullText = (await finalResult.text) || fullText;
+
+  // 6. Post-processing
+  session.messageHistory.push({ role: "assistant", content: fullText });
+  const topicRooms = contextState.context.activeRooms.map((r) => r.room);
+  storeMessages(session, message, fullText, topicRooms).catch(() => {});
+  detectPreferences(session.userId, message, fullText).catch(() => {});
+
+  callbacks.onDone(fullText);
+  return fullText;
 }
 
 /**

@@ -1,0 +1,129 @@
+{
+  "timestamp": "2026-04-10T23:14:57.180Z",
+  "total": 14,
+  "passed": 14,
+  "failed": 0,
+  "passRate": "100%",
+  "totalTimeSeconds": 426,
+  "results": [
+    {
+      "test": "Basic question",
+      "input": "What is Redis?",
+      "output": "Redis, short for **Remote Dictionary Server**, is an open-source, in-memory data store renowned for its speed and adaptability. By storing data in RAM, it achieves sub-millisecond read and write latencies.\n\n### Key Features:\n\n*   **In-Memory Data Storage:** Its primary strength lies in storing data in memory, delivering exceptional speed.\n*   **Key-Value Database:** Redis fundamentally operates as a key-value store, associating keys with their corresponding values.\n*   **Rich Data Structures:** Beyond simple key-value pairs, Redis supports diverse data structures, including strings, lists, hashes, sets, and sorted sets.\n*   **Persistence Options:** While primarily in-memory, Redis offers options to persist data to disk, enabling its use as a durable database.\n\n### Common Use Cases:\n\n1.  **Caching:** A prevalent use case involves caching frequently accessed data to minimize latency and reduce the load on the primary database.\n2.  **Session Management:** Ideal for storing user session data in web applications.\n3.  **Real-time Applications:** Well-suited for real-time analytics, leaderboards, and messaging systems (functioning as a message broker).\n4.  **Vector Database:** Increasingly used in AI applications for vector similarity search, powering semantic search and retrieval-augmented generation (RAG).\n",
+      "duration": 38.395,
+      "pass": true,
+      "notes": "Non-trivial answer about Redis"
+    },
+    {
+      "test": "Follow-up question",
+      "input": "What data structures does Redis support?",
+      "output": "Redis supports a variety of data structures:\n\n*   **Strings:** Basic key-value storage for text, serialized data, or binary data. Supports atomic operations (e.g., increment/decrement).\n*   **Lists:** Ordered collections of strings, suitable for queues and stacks.\n*   **Hashes:** Key-value maps within a key, ideal for representing objects.\n*   **Sets:** Unordered collections of unique strings, useful for tracking unique items.\n*   **Sorted Sets (ZSETs):** Sets where each member has a score, enabling ordering. Commonly used for leaderboards.\n*   **Streams:** Append-only, log-like structures for real-time data ingestion.\n*   **Bitmaps & HyperLogLogs:** Efficient data structures for analytics, like counting unique users with minimal memory.\n*   **JSON:** Native support for storing, retrieving, and manipulating JSON documents.\n",
+      "duration": 40.091,
+      "pass": true,
+      "notes": "Mentions specific data structures"
+    },
+    {
+      "test": "Question before feedback",
+      "input": "What is Docker?",
+      "output": "Docker is a platform that uses **containers** to make it easier to develop, deploy, and run applications.\n\nImagine a container as a neat, self-contained package. It holds everything an application requires to run, like the code itself, the runtime environment, system tools, and necessary libraries. Importantly, this package is isolated from the rest of the system.\n\n### Key Benefits:\n\n*   **Eliminates \"It Works on My Machine\" Issues:** Docker packages applications with their environments, guaranteeing consistent operation across different infrastructures – from a developer's laptop to a production server.\n*   **Lightweight and Efficient:** Unlike traditional Virtual Machines (VMs) that virtualize an entire operating system, containers share the host OS kernel. This makes them significantly smaller, faster to start, and more resource-friendly.\n*   **Isolation for Stability:** Containers operate in isolated processes, preventing conflicts between applications and ensuring the stability of the host system.\n\n### Core Components:\n\n*   **Dockerfile:** A script containing instructions for building a Docker image.\n*   **Image:** A read-only template used to create containers.\n*   **Container:** A running instance of an image.\n",
+      "duration": 35.781,
+      "pass": true,
+      "notes": "Baseline Docker answer"
+    },
+    {
+      "test": "/bad feedback with correction",
+      "input": "/bad You should mention that Docker uses OS-level virtualization, not hardware virtualization like VMs. That's the key distinction.",
+      "output": "Feedback recorded. Error type: missed_context.",
+      "duration": 12.298,
+      "pass": true,
+      "notes": "Feedback acknowledged and processed"
+    },
+    {
+      "test": "Same question AFTER feedback",
+      "input": "What is Docker?",
+      "output": "Docker is a platform for building, deploying, and running applications using containers.\n\nThink of a container as a lightweight, standalone package that includes everything an application needs to run: code, runtime, system tools, libraries, and settings. Because of this, Docker ensures that your application will run the same way, regardless of where it's deployed, solving the \"it works on my machine\" problem.\n",
+      "duration": 47.075,
+      "pass": true,
+      "notes": "Answer present but may not reflect correction"
+    },
+    {
+      "test": "/good on improved answer",
+      "input": "/good",
+      "output": "Learned from positive feedback (helpful_depth):\n  - Use analogies and real-world examples to explain complex technical concepts.\n  - Highlight the benefits and practical applications of the technology being explained.\n  - Address common pain points or problems that the technology solves.",
+      "duration": 5.213,
+      "pass": true,
+      "notes": "Positive feedback processed"
+    },
+    {
+      "test": "True claim verification",
+      "input": "Python was created by Guido van Rossum, right?",
+      "output": "Yes, that's correct. Guido van Rossum created Python, starting the project in the late 1980s.\n",
+      "duration": 33.523,
+      "pass": true,
+      "notes": "Confirms true fact"
+    },
+    {
+      "test": "False claim — should correct",
+      "input": "I heard that JavaScript was created by Microsoft in 2005.",
+      "output": "That's a common point of confusion, but JavaScript was actually created by Brendan Eich at Netscape in 1995.\n\nMicrosoft did develop its own version of the language called JScript in 1996 to compete with Netscape's JavaScript, which might be the source of the mix-up.",
+      "duration": 55.562,
+      "pass": true,
+      "notes": "Corrected with accurate info"
+    },
+    {
+      "test": "Complex question (triggers reflection)",
+      "input": "Explain the CAP theorem and when you'd choose CP vs AP.",
+      "output": "The CAP theorem is a fundamental concept in distributed systems. It states that it's impossible for a distributed system to simultaneously guarantee all three of the following:\n\n*   **Consistency (C):** All nodes see the same data at the same time. In other words, every read receives the most recent write or an error.\n*   **Availability (A):** Every request receives a response, without guarantee that it contains the most recent write.\n*   **Partition Tolerance (P):** The system continues to operate despite arbitrary partitioning due to network failures.\n\nIn reality, you must design your system with partition tolerance in mind because network failures are inevitable. Therefore, the choice boils down to choosing between consistency and availability.\n\n### CP (Consistency and Partition Tolerance)\n\nChoose CP when data consistency is critical, even at the expense of availability during a partition.\n\n*   **Trade-off:** During a network partition, the system might refuse writes or return an error to maintain consistency. Some nodes might become unavailable.\n*   **Example:** A banking system. It's crucial that all transactions are consistent. If a network partition occurs, the system should prioritize data integrity over allowing potentially incorrect transactions.\n*   **Use Cases:**\n    *   Financial applications (banking, trading)\n    *   Inventory management systems where accuracy is paramount\n    *   Systems requiring strong data integrity and ACID properties\n\n### AP (Availability and Partition Tolerance)\n\nChoose AP when high availability is more important than strong consistency. The system will continue to operate and respond to requests, even if the data is not perfectly consistent across all nodes during a partition. This often leads to \"eventual consistency,\" where data becomes consistent over time.\n\n*   **Trade-off:** During a partition, the system will continue to accept writes and respond to reads, but there's a risk of serving stale data.\n*   **Example:** Social media feeds. It's acceptable if a new post isn't immediately visible to all users, as long as the service remains responsive and users can continue to post and interact.\n*   **Use Cases:**\n    *   Social media platforms\n    *   Content delivery networks (CDNs)\n    *   E-commerce sites where showing *something* is better than showing an error.\n    *   Any system prioritizing uptime and responsiveness over immediate consistency.\n",
+      "duration": 52.939,
+      "pass": true,
+      "notes": "Covers all three aspects of CAP"
+    },
+    {
+      "test": "Set preference",
+      "input": "Keep your answers super short from now on. One or two sentences max.",
+      "output": "OK. I'll keep my responses brief.",
+      "duration": 32.063,
+      "pass": true,
+      "notes": "Preference instruction given"
+    },
+    {
+      "test": "Test preference respected",
+      "input": "What is Kubernetes?",
+      "output": "Kubernetes is an open-source system for automating deployment, scaling, and management of containerized applications.\n",
+      "duration": 41.504,
+      "pass": true,
+      "notes": "Response has ~1 sentences — concise"
+    },
+    {
+      "test": "Memory recall",
+      "input": "What do you know about me and my preferences?",
+      "output": "Based on our conversations, you like short, casual answers, and we've mostly discussed software development topics like Docker and Kubernetes.\n",
+      "duration": 31.095,
+      "pass": true,
+      "notes": "Recalls conciseness preference"
+    },
+    {
+      "test": "Context rooms tracked",
+      "input": "N/A",
+      "output": "11 active rooms",
+      "duration": 0,
+      "pass": true,
+      "notes": "11 rooms loaded with relevance decay"
+    },
+    {
+      "test": "Data persisted to Neon",
+      "input": "DB check",
+      "output": "{\"drawers\":37,\"facts\":6,\"feedback\":0,\"prefs\":40,\"messages\":60}",
+      "duration": 0,
+      "pass": true,
+      "notes": "37 drawers, 6 facts, 0 feedback, 40 prefs, 60 messages"
+    }
+  ],
+  "dbState": {
+    "drawers": 37,
+    "facts": 6,
+    "feedback": 0,
+    "prefs": 40,
+    "messages": 60
+  }
+}
