@@ -12,6 +12,7 @@ const RESET = "\x1b[0m";
 const CYAN = "\x1b[36m";
 const YELLOW = "\x1b[33m";
 const GREEN = "\x1b[32m";
+const CLEAR_LINE = "\x1b[2K\r";
 
 async function main() {
   console.log("=== Memory Palace Agent ===");
@@ -74,41 +75,38 @@ async function main() {
 
     try {
       // Show thinking indicator
-      process.stdout.write(`\n${DIM}[thinking...]${RESET}`);
+      process.stdout.write(`${DIM}  [thinking...]${RESET}`);
 
       let firstToken = true;
+
       await handleMessageStream(session, trimmed, {
         onText: (delta) => {
           if (firstToken) {
-            // Clear the thinking indicator and start agent output
-            process.stdout.write(`\r${YELLOW}Agent:${RESET} `);
+            process.stdout.write(`${CLEAR_LINE}\n${YELLOW}Agent:${RESET} `);
             firstToken = false;
           }
           process.stdout.write(delta);
         },
         onToolCall: (toolName, args) => {
           if (firstToken) {
-            process.stdout.write(`\r`);
+            process.stdout.write(CLEAR_LINE);
             firstToken = false;
           }
-          const argsStr = Object.entries(args as Record<string, unknown>)
+          const argsStr = Object.entries(args)
             .map(([k, v]) => `${k}=${typeof v === "string" ? v.slice(0, 40) : v}`)
             .join(", ");
-          process.stdout.write(
-            `\n  ${DIM}🔧 ${toolName}(${argsStr})${RESET}\n`
-          );
+          console.log(`\n  ${DIM}🔧 ${toolName}(${argsStr})${RESET}`);
         },
-        onToolResult: (toolName, _result) => {
-          process.stdout.write(
-            `  ${DIM}✓ ${toolName} done${RESET}\n`
-          );
+        onToolResult: (toolName) => {
+          console.log(`  ${DIM}✓ ${toolName} done${RESET}`);
         },
         onDone: () => {
-          process.stdout.write("\n\n");
+          // Ensure clean newlines before next prompt
+          console.log("\n");
         },
       });
     } catch (err) {
-      process.stdout.write("\r");
+      process.stdout.write(CLEAR_LINE);
       console.error(
         `\n[Error] ${err instanceof Error ? err.message : err}\n`
       );
