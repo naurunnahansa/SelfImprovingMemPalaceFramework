@@ -50,7 +50,7 @@ function formatToolCall(
   const icons: Record<string, string> = {
     searchMemory: "🔍",
     storeMemory: "💾",
-    searchWebTool: "🌐",
+    exaSearch: "🌐",
     queryKnowledge: "🧠",
     listPalace: "🏛️",
     storeKnowledge: "📝",

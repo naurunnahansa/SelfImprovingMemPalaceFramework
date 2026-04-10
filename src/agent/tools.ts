@@ -56,16 +56,16 @@ export const agentTools = {
     },
   }),
 
-  searchWebTool: tool({
+  exaSearch: tool({
     description:
-      "Search the web using Exa for current information. Use this to verify facts or find up-to-date information.",
+      "Search the web via Exa for real-time, up-to-date information. Use this to verify facts, check recent events, ground claims with evidence, or find information beyond your training data. Always prefer this over guessing about current events or recent changes.",
     inputSchema: z.object({
-      query: z.string().describe("Search query"),
+      query: z.string().describe("Search query — be specific for better results"),
       numResults: z
         .number()
         .optional()
         .default(5)
-        .describe("Number of results"),
+        .describe("Number of results to return"),
     }),
     execute: async ({ query, numResults }) => {
       const results = await searchWeb(query, { numResults });
