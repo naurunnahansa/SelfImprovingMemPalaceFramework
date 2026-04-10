@@ -1,5 +1,5 @@
 {
-  "name": "MemFrameWork",
+  "name": "self-improving-mem-palace-framework",
   "version": "1.0.0",
   "description": "Memory Palace AI Agent — persistent structured memory with fact verification",
   "type": "module",

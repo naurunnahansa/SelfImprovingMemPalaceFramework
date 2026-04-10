@@ -1,4 +1,4 @@
-# Memory Palace Agent
+# Self-Improving Memory Palace Framework
 
 A self-improving AI agent with persistent structured memory, fact verification, and feedback-driven learning. Built with TypeScript, PostgreSQL + pgvector, Vercel AI SDK v6, and XState v5.
 
@@ -110,8 +110,8 @@ FAST_MODEL=google:gemini-2.0-flash     # for classification, preference detectio
 ### Install
 
 ```bash
-git clone https://github.com/himashi-lilu/MemFrameWork.git
-cd MemFrameWork
+git clone https://github.com/naurunnahansa/SelfImprovingMemPalaceFramework.git
+cd SelfImprovingMemPalaceFramework
 pnpm install
 ```
 
