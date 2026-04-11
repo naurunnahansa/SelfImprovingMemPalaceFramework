@@ -54,7 +54,6 @@ function formatToolCall(
     queryKnowledge: "🧠",
     listPalace: "🏛️",
     storeKnowledge: "📝",
-    recallConversations: "💬",
   };
   const icon = icons[toolName] ?? "⚡";
 
