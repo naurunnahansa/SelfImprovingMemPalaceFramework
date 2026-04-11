@@ -75,12 +75,20 @@ export async function loadL0(userId: string): Promise<LayerContent> {
 // Top memories by access frequency * recency. Always loaded. ~800 tokens.
 
 export async function loadL1(userId?: string): Promise<LayerContent> {
-  // Score: access_count / (1 + days_since_access * 0.1)
+  // Load recent conversation summaries first (warm/semi-hot)
+  const recentSummaries = await db.execute(sql`
+    SELECT * FROM drawers
+    WHERE wing = 'conversations' AND hall = 'summaries'
+    ORDER BY accessed_at DESC
+    LIMIT 3
+  `);
+
+  // Then top memories by access frequency * recency
   const rows = await db.execute(sql`
     SELECT *,
       access_count::float / (1 + EXTRACT(EPOCH FROM (now() - accessed_at)) / 86400 * 0.1) as recency_score
     FROM drawers
-    WHERE wing != 'system'
+    WHERE wing != 'system' AND NOT (wing = 'conversations' AND hall = 'summaries')
     ORDER BY recency_score DESC
     LIMIT 30
   `);
@@ -88,6 +96,17 @@ export async function loadL1(userId?: string): Promise<LayerContent> {
   let content = "";
   let tokens = 0;
   const ids: string[] = [];
+
+  // Add recent conversation summaries first (warm context)
+  for (const row of recentSummaries.rows as Array<Record<string, unknown>>) {
+    const tc = row.token_count as number;
+    if (tokens + tc > L1_BUDGET * 0.4) break; // Reserve 40% of L1 for summaries max
+    const snippet = (row.content as string).slice(0, 300);
+    content += `[Recent conversation]\n${snippet}\n\n`;
+    tokens += tc;
+    ids.push(row.id as string);
+  }
+
   const roomGroups = new Map<string, string[]>();
 
   for (const row of rows.rows as Array<Record<string, unknown>>) {

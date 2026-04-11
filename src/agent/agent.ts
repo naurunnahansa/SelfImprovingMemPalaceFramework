@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { generateText, streamText, stepCountIs } from "ai";
 import { createActor, waitFor } from "xstate";
 import { getModel } from "../config.js";
@@ -148,8 +149,10 @@ export async function handleMessage(
     corrections
   );
 
-  // 9. Add assistant response to history
-  session.messageHistory.push({ role: "assistant", content: responseText });
+  // 9. Add assistant response to history (skip empty — Anthropic rejects empty content)
+  if (responseText.trim()) {
+    session.messageHistory.push({ role: "assistant", content: responseText });
+  }
 
   // 10. Store messages in DB (fire and forget)
   const topicRooms = contextState.context.activeRooms.map((r) => r.room);
@@ -157,6 +160,9 @@ export async function handleMessage(
 
   // 11. Detect preferences in background (fire and forget)
   detectPreferences(session.userId, message, responseText).catch(() => {});
+
+  // 12. Update rolling conversation summary in background (fire and forget)
+  updateConversationSummary(session, message, responseText).catch(() => {});
 
   return responseText;
 }
@@ -246,11 +252,14 @@ export async function handleMessageStream(
   const finalResult = await result;
   fullText = (await finalResult.text) || fullText;
 
-  // 6. Post-processing
-  session.messageHistory.push({ role: "assistant", content: fullText });
+  // 6. Post-processing — only add to history if non-empty (Anthropic rejects empty content)
+  if (fullText.trim()) {
+    session.messageHistory.push({ role: "assistant", content: fullText });
+  }
   const topicRooms = contextState.context.activeRooms.map((r) => r.room);
   storeMessages(session, message, fullText, topicRooms).catch(() => {});
   detectPreferences(session.userId, message, fullText).catch(() => {});
+  updateConversationSummary(session, message, fullText).catch(() => {});
 
   callbacks.onDone(fullText);
   return fullText;
@@ -398,8 +407,8 @@ async function reflectOnResponse(
   initialResponse: string,
   factCheckCorrections: string[]
 ): Promise<string> {
-  // Skip reflection for very short responses or if fact-check already corrected things
-  if (initialResponse.length < 50 || factCheckCorrections.length > 0) {
+  // Skip reflection for empty/short responses or if fact-check already corrected things
+  if (!initialResponse.trim() || initialResponse.length < 50 || factCheckCorrections.length > 0) {
     return initialResponse;
   }
 
@@ -529,6 +538,78 @@ async function storeMessages(
     });
   } catch {
     // Silent — message storage is best-effort
+  }
+}
+
+// ─── Rolling Conversation Summary ────────────────────────────────────────────
+
+/**
+ * After every exchange, update a rolling summary of the conversation.
+ * This runs in the background and saves a compact summary as a "warm" drawer
+ * so the agent can recall what was discussed even across process restarts.
+ *
+ * The summary is cumulative — each update incorporates the previous summary
+ * plus the latest exchange, keeping it under ~300 tokens.
+ */
+async function updateConversationSummary(
+  session: Session,
+  userMessage: string,
+  assistantResponse: string
+): Promise<void> {
+  try {
+    // Find existing summary for this conversation
+    const existing = await db.execute(sql`
+      SELECT id, content FROM drawers
+      WHERE wing = 'conversations'
+        AND hall = 'summaries'
+        AND room = ${session.conversationId}
+      ORDER BY created_at DESC
+      LIMIT 1
+    `);
+
+    const existingRow = existing.rows[0] as
+      | { id: string; content: string }
+      | undefined;
+    const previousSummary = existingRow?.content ?? "";
+
+    // Generate updated rolling summary
+    const { text: newSummary } = await generateText({
+      model: getModel("fast"),
+      prompt: `Update this conversation summary with the latest exchange. Keep it concise (under 200 words). Include: who the user is, key topics discussed, important facts learned, feedback given, and any preferences detected.
+
+${previousSummary ? `Previous summary:\n${previousSummary}\n\n` : ""}Latest exchange:
+User: ${userMessage.slice(0, 500)}
+Assistant: ${assistantResponse.slice(0, 500)}
+
+Write the updated summary as a single paragraph. No headers or bullet points — just a compact narrative.`,
+    });
+
+    if (!newSummary.trim()) return;
+
+    if (existingRow) {
+      // UPDATE the existing summary in-place (don't create duplicates)
+      await db.execute(sql`
+        UPDATE drawers
+        SET content = ${newSummary},
+            content_hash = ${createHash("sha256").update(newSummary).digest("hex")},
+            accessed_at = now(),
+            access_count = access_count + 1,
+            token_count = ${Math.ceil(newSummary.length / 4)}
+        WHERE id = ${existingRow.id}::uuid
+      `);
+    } else {
+      // First summary for this conversation — also store timestamp in metadata
+      await storeDrawer({
+        wing: "conversations",
+        hall: "summaries",
+        room: session.conversationId,
+        content: newSummary,
+        source: `conversation:${session.conversationId}`,
+        metadata: { startedAt: new Date().toISOString() },
+      });
+    }
+  } catch {
+    // Silent — summary is best-effort background work
   }
 }
 

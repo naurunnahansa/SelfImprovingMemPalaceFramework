@@ -1,5 +1,6 @@
 import { tool } from "ai";
 import { z } from "zod";
+import { sql } from "drizzle-orm";
 import { hybridSearch } from "../palace/search.js";
 import { storeDrawer, listWings, listRooms } from "../palace/store.js";
 import {
@@ -9,6 +10,7 @@ import {
   addTriple,
 } from "../palace/graph.js";
 import { searchWeb } from "../search/exa.js";
+import { db } from "../db/client.js";
 
 export const agentTools = {
   searchMemory: tool({
@@ -159,6 +161,60 @@ export const agentTools = {
         source: "conversation",
       });
       return { stored: true, tripleId: triple.id };
+    },
+  }),
+
+  recallConversations: tool({
+    description:
+      "Recall past conversations. Use this when the user asks about previous conversations, what you've discussed before, or your most recent conversation. Returns chronologically ordered conversation summaries.",
+    inputSchema: z.object({
+      query: z
+        .string()
+        .optional()
+        .describe("Optional search query to find specific conversations. Leave empty for most recent."),
+      limit: z
+        .number()
+        .optional()
+        .default(5)
+        .describe("Number of past conversations to return"),
+    }),
+    execute: async ({ query, limit }) => {
+      if (query) {
+        // Search for conversations matching the query
+        const results = await hybridSearch(query, {
+          wing: "conversations",
+          hall: "summaries",
+          limit,
+        });
+        return results.map((r) => ({
+          conversationId: r.room,
+          summary: r.content,
+          lastAccessed: r.accessedAt,
+        }));
+      }
+
+      // Return most recent conversations
+      const results = await db.execute(sql`
+        SELECT room as conversation_id, content as summary, accessed_at, metadata
+        FROM drawers
+        WHERE wing = 'conversations' AND hall = 'summaries'
+        ORDER BY accessed_at DESC
+        LIMIT ${limit}
+      `);
+
+      return (
+        results.rows as Array<{
+          conversation_id: string;
+          summary: string;
+          accessed_at: string;
+          metadata: Record<string, unknown> | null;
+        }>
+      ).map((r) => ({
+        conversationId: r.conversation_id,
+        summary: r.summary,
+        lastAccessed: r.accessed_at,
+        startedAt: r.metadata?.startedAt ?? null,
+      }));
     },
   }),
 };
