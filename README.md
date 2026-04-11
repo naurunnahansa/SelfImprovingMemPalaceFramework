@@ -80,6 +80,33 @@ Turn 4: User types "/good"
         → Boosts user preference for concise answers
 ```
 
+## Conversation Memory
+
+Every exchange is automatically saved in the background — no `/save` command needed:
+
+1. **Raw messages** stored with embeddings in the `messages` table
+2. **Topic-tagged drawers** stored in the palace under the relevant room
+3. **Rolling summary** generated after each exchange — a compact narrative of the conversation so far, updated in-place (not duplicated)
+
+On the next session, recent conversation summaries are loaded as "warm" context in the L1 layer. The agent can recall past conversations by searching the palace (`wing='conversations'`, `hall='summaries'`).
+
+### Unified Palace Structure
+
+Everything lives in one place — conversations, corrections, learnings, facts:
+
+```
+Palace
+├── conversations/summaries/{id}           ← rolling conversation summaries
+├── user:{id}/conversations/{topic}        ← raw exchanges by topic
+├── system/facts/verified                  ← fact-checked claims
+├── system/identity                        ← agent + user identity (L0)
+├── {wing}/learnings/{room}                ← what worked (/good patterns)
+├── {wing}/corrections/{room}              ← what went wrong (/bad corrections)
+└── system/learnings/universal_patterns    ← cross-topic style rules
+```
+
+One tool (`searchMemory`) searches all of it. Filter by `wing` and `hall` to narrow scope.
+
 ## Tech Stack
 
 | Component | Choice |
